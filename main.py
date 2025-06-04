@@ -1,12 +1,7 @@
 from flask import Flask, jsonify, request
 import requests
-from pymongo import MongoClient
 
 app = Flask(__name__)
-
-client = MongoClient("mongodb://3.82.52.70:27017/")  # ip
-db = client["paises"]
-registros = db["registros"]
 
 @app.route("/clima", methods=["GET"])
 def clima():
@@ -18,6 +13,7 @@ def clima():
     if response.status_code == 200:
         data = response.json()
         temperature = data["current_weather"]["temperature"]
+
         return jsonify(temperature)
     else:
         return jsonify({'error': 'No se pudo obtener el clima'}), 500
@@ -32,14 +28,7 @@ def pais():
         data = response.json()[0]
         capital = data['capital'][0]
         lat, lon = data['capitalInfo']['latlng']
-        """
-        registros.insert_one({ #bd
-            "nombre": name,
-            "capital": capital,
-            "latitud": lat,
-            "longitud": lon
-        })
-        """
+        
         return jsonify([capital, lat, lon])
     else:
         return jsonify({'error': 'No se pudo obtener el país'}), 500
