@@ -1,52 +1,72 @@
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, request
 import requests
+from pymongo import MongoClient
 
 app = Flask(__name__)
-back_api = "http://18.207.125.47:8080"
 
+client = MongoClient("mongodb://3.82.52.70:27017/")  # ip
+db = client["paises"]
+registros = db["registros"]
 
+@app.route("/clima", methods=["GET"])
+def clima():
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    url = f'https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true'
+    response = requests.get(url)
 
-@app.route("/", methods=["GET", "POST"])
-def inicio():
-    pais_data = None
-    if request.method == "POST":
-        pais = request.form.get("pais")
-        if pais:
-            response = requests.get(f"{back_api}/pais?name={pais}")
-            if response.status_code == 200:
-                pais_data = response.json()
-    return render_template("pag1.html", pais=pais_data)
+    if response.status_code == 200:
+        data = response.json()
+        temperature = data["current_weather"]["temperature"]
+        return jsonify(temperature)
+    else:
+        return jsonify({'error': 'No se pudo obtener el clima'}), 500
 
-@app.route("/pag2", methods=["GET", "POST"])
-def inicio2():
-    clima_data = None
-    if request.method == "POST":
-        lat = request.form.get("latitud")
-        lon = request.form.get("longitud")
-        if lat and lon:
-            response = requests.get(f"{back_api}/clima?lat={lat}&lon={lon}")
-            if response.status_code == 200:
-                clima_data = response.json()
-    return render_template("pag2.html", clima=clima_data)
+@app.route("/pais", methods=["GET"])
+def pais():
+    name = request.args.get("name")
+    url = f'https://restcountries.com/v3.1/name/{name}'
+    response = requests.get(url)
 
-@app.route("/pag3", methods=["GET", "POST"])
-def inicio3():
-    consejo_data = None
-    if request.method == "POST":
-        response = requests.get(f"{back_api}/consejo")
-        if response.status_code == 200:
-            consejo_data = response.json()
-    return render_template("pag3.html", consejo=consejo_data)
+    if response.status_code == 200:
+        data = response.json()[0]
+        capital = data['capital'][0]
+        lat, lon = data['capitalInfo']['latlng']
+        """
+        registros.insert_one({ #bd
+            "nombre": name,
+            "capital": capital,
+            "latitud": lat,
+            "longitud": lon
+        })
+        """
+        return jsonify([capital, lat, lon])
+    else:
+        return jsonify({'error': 'No se pudo obtener el país'}), 500
 
-@app.route("/pag4", methods=["GET","POST"])
-def inicio4():
-    imagen_data = None
-    if request.method == "POST":
-        name=request.form.get("character")
-        response=requests.get(f"{back_api}/api4?name={name}")
-        if response.status_code == 200:
-            imagen_data=response.json()
-    return render_template("pag4.html",imagen=imagen_data)
+@app.route("/registros", methods=["GET"])
+def listar_registros():
+    paises_guardados = list(registros.find({}, {"_id": 0}))
+    return jsonify(paises_guardados), 200
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+@app.route("/consejo", methods=["GET"])
+def consejo():
+    response = requests.get('https://api.adviceslip.com/advice')
+    if response.status_code == 200:
+        data = response.json()
+        consejo = data['slip']['advice']
+        return jsonify({'consejo': consejo})
+    else:
+        return jsonify({'error': 'No se pudo obtener el consejo'}), 500
+
+@app.route("/api4")
+def api4():
+    name = request.args.get("name")
+    response=requests.get(f"https://rickandmortyapi.com/api/character/?name={name}")
+    if response.status_code== 200:
+        data=response.json()
+        image=data["results"][0]["image"]
+        return jsonify({"url":image})
+
+if __name__=="__main__":
+    app.run(debug=True, host="0.0.0.0", port=8080)
